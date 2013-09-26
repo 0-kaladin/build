@@ -74,6 +74,7 @@ endif
 
 TARGET_NO_UNDEFINED_LDFLAGS := -Wl,--no-undefined
 
+ifeq ($(USE_LINARO_COMPILER_FLAGS),yes)
 TARGET_arm_CFLAGS :=    -O3 \
                         -fomit-frame-pointer \
                         -fstrict-aliasing    \
@@ -81,15 +82,31 @@ TARGET_arm_CFLAGS :=    -O3 \
                         -funsafe-loop-optimizations \
                         -ftree-vectorize \
                         -pipe $(STRICT_ALIASING_WARNINGS)
+else
+    TARGET_arm_CFLAGS :=    -O2 \
+                            -fomit-frame-pointer \
+                            -fstrict-aliasing    \
+                            -funswitch-loops
+endif
 
 # Modules can choose to compile some source as thumb.
+ifeq ($(USE_LINARO_COMPILER_FLAGS),yes)
 TARGET_thumb_CFLAGS :=  -mthumb \
                         -O3 \
                         -fomit-frame-pointer \
                         -fstrict-aliasing \
                         -funsafe-math-optimizations \
                         -pipe $(STRICT_ALIASING_WARNINGS)
+else
+        TARGET_thumb_CFLAGS :=  -mthumb \
+                                -Os \
+                                -fomit-frame-pointer \
+                                -fstrict-aliasing \
+                                -Wstrict-aliasing=2 \
+                                -Werror=strict-aliasing
+endif
 
+#Silence Warnings
 TARGET_arm_CFLAGS +=    -Wno-unused-parameter \
                         -Wno-unused-value \
                         -Wno-unused-function
@@ -97,6 +114,13 @@ TARGET_arm_CFLAGS +=    -Wno-unused-parameter \
 TARGET_thumb_CFLAGS +=  -Wno-unused-parameter \
                         -Wno-unused-value \
                         -Wno-unused-function
+
+# Turn off strict-aliasing if we're building an AOSP variant without the
+# patchset...
+ifeq ($(DEBUG_NO_STRICT_ALIASING),yes)
+TARGET_arm_CFLAGS += -fno-strict-aliasing -Wno-error=strict-aliasing
+TARGET_thumb_CFLAGS += -fno-strict-aliasing -Wno-error=strict-aliasing
+endif
 
 # Set FORCE_ARM_DEBUGGING to "true" in your buildspec.mk
 # or in your environment to force a full arm build, even for
@@ -143,7 +167,15 @@ TARGET_GLOBAL_CFLAGS += $(TARGET_ANDROID_CONFIG_CFLAGS)
 # by turning off the builtin sin function.
 ifneq ($(filter 4.6 4.6.% 4.7 4.7.% 4.8 4.8%, $(TARGET_GCC_VERSION)),)
 TARGET_GLOBAL_CFLAGS += -Wno-unused-but-set-variable -fno-builtin-sin \
-			-fno-strict-volatile-bitfields
+			-fno-strict-volatile-bitfields \
+                        -Wno-unused-parameter -Wno-unused-but-set-parameter
+ifneq ($(filter 4.8 4.8.%, $(shell $(TARGET_CC) --version)),)
+gcc_variant_ldflags := \
+			-Wl,--enable-new-dtags
+else
+gcc_variant_ldflags := \
+			-Wl,--icf=safe
+endif
 endif
 
 # This is to avoid the dreaded warning compiler message:
@@ -162,12 +194,12 @@ TARGET_GLOBAL_LDFLAGS += \
 			-Wl,-z,now \
 			-Wl,--warn-shared-textrel \
 			-Wl,--fatal-warnings \
-			-Wl,--icf=safe \
 			$(arch_variant_ldflags) $(gcc_variant_ldflags)
 
 TARGET_GLOBAL_CFLAGS += -mthumb-interwork
 
-TARGET_GLOBAL_CPPFLAGS += -fvisibility-inlines-hidden
+TARGET_GLOBAL_CPPFLAGS += -fvisibility-inlines-hidden \
+                         $(arch_variant_cflags)
 
 # More flags/options can be added here
 TARGET_RELEASE_CFLAGS := \
@@ -257,6 +289,13 @@ TARGET_STRIP_MODULE:=true
 TARGET_DEFAULT_SYSTEM_SHARED_LIBRARIES := libc libstdc++ libm
 
 TARGET_CUSTOM_LD_COMMAND := true
+
+# Enable the Dalvik JIT compiler if not already specified.
+ifeq ($(strip $(WITH_JIT)),)
+    WITH_JIT := true
+    WITH_JIT_TUNING := true
+endif
+
 
 define transform-o-to-shared-lib-inner
 $(hide) $(PRIVATE_CXX) \
