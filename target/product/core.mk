@@ -32,7 +32,6 @@ PRODUCT_PACKAGES += \
     TelephonyProvider \
     UserDictionaryProvider \
     VpnDialogs \
-    abcc \
     atrace \
     libandroidfw \
     libaudiopreprocessing \
@@ -40,6 +39,7 @@ PRODUCT_PACKAGES += \
     libbcc \
     libfilterpack_imageproc \
     libgabi++ \
+    libanalogradiobroadcasting \
     libkeystore \
     libmdnssd \
     libnfc_ndef \
